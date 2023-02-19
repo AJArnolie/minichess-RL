@@ -2,7 +2,6 @@
 
 
 <p align="center">
-<img width="307" alt="Screen Shot 2023-02-18 at 4 55 26 PM" src="https://user-images.githubusercontent.com/57520931/219906264-4bf110f3-a373-4582-a3e0-d90a8b21a989.png">
 <img width="308" alt="Screen Shot 2023-02-18 at 4 55 16 PM" src="https://user-images.githubusercontent.com/57520931/219906266-023cf050-3194-4faa-bb24-a1c5f4378d9c.png">
 </p>
 
