@@ -1,70 +1,24 @@
-import math
-import chess
+'''
+Minichess Implementation
+'''
+
+import constants
 import numpy as np
 
-'''
-Monte Carlo Tree Search
-- Online Planning
-- During sim, updates estimated Q-function and # of times (s,a) pair is selected
-- After m sims, chooses action maximizing estimated Q-function
-- Exploration Strategy UCB1: Maximize --> Q(s,a) + c * sqrt(log(N(s)) / N(s, a))
-- As we take action, step into new sampled states using generative model
-- At unexplored state, initialize N(s,a) and Q(s,a) to 0 for each a, then return value estimate (Commonly estimated using policy rollout for n steps)
-'''
+# TODO: Maybe make the different variants Subclasses of this one?
+# TODO: Represent pieces as characters or ints?
+# TODO: Consider this implementation: https://github.com/mdhiebert/minichess/blob/main/minichess/games/gardner/pieces/knight.py
 
-class MonteCarloTreeSearch:
-    def __init__(self, m=100, d=5, c=0.5, gamma=0.9):
-        self.m = m # number of simulations
-        self.d = d # depth
-        self.c = c # exploration constant
-        self.gamma = gamma # discount factor
-
-        self.S = []  # How do we define states and actions here?
-        self.A = []
-        
-        self.U = [0 for _ in range(len(self.S))] # value function estimate
-        self.Q = {} # action value estimates
-        self.N = {} # visit counts
-
-    # Returns optimal action
-    def run_search(self, s):
-        for _ in range(self.m):
-            self.simulate(s, self.d)
-        return self.A[np.argmax([self.Q[(s, a)] for a in self.A])]
-
-    def simulate(self, s, d=5):
-        if d <= 0:
-            return self.U(s)
-        if (s, self.A[0]) not in self.N:
-            for a in self.A:
-                self.N[(s, a)] = 0
-                self.Q[(s, a)] = 0.0
-            return self.U(s)
-        
-        a = self.explore(s)
-        s_prime, r = self.TR(s, a)
-        q = r + self.gamma * self.simulate(s_prime, d - 1)
-
-        self.N[(s, a)] += 1
-        self.Q[(s, a)] += (q - self.Q[(s, a)]) / self.N[(s, a)]
-        return q
-
-    def TR(self, s, a):
-        return 0, 0
-
-    # UCB1 Exploration Policy
-    # --------------------------------
-    def bonus(self, nsa, ns):
-        return float('inf') if nsa == 0 else math.sqrt(math.log(ns) / nsa)
-
-    def explore(self, s):
-        ns = sum(self.N[(s, a)] for a in self.A)
-        return self.A[np.argmax([self.Q[(s, a)] + self.c * self.bonus(self.N[(s, a)], ns) for a in self.A])]
-    # --------------------------------
-
+class Minichess:
+    def __init__(self, board_size=(4, 5), variant="general", turn=0):
+        self.board_size = board_size
+        self.board = np.zeros(self.board_size)
+        self.variant = variant
+        self.turn = turn # Which player starts
 
 def main():
-    MCTS = MonteCarloTreeSearch()
+    board = Minichess("Silverman4x5")
+    print(board)
 
 if __name__ == "__main__":
     main()
