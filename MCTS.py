@@ -17,7 +17,6 @@ class MonteCarloTreeSearch:
 
         self.Q = defaultdict(lambda:0) # action value estimates
         self.N = {} # (s-a) visit counts
-        self.Ns = {} # state visit counts
 
     # Performs m iterations of MCTS
     def run_sims(self, state):
@@ -32,9 +31,11 @@ class MonteCarloTreeSearch:
 
     def simulate(self, s, turn=0, d=5):
         s_rep = s.state_representation() + str(turn)
+        # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
             return 100
-        if d <= 0:
+        # Reached max depth, return estimated utility
+        if d <= 0: 
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
         
         if (s_rep, s.condensed_legal_actions()[0]) not in self.N:
