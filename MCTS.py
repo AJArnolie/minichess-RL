@@ -1,71 +1,108 @@
-'''
-Monte Carlo Tree Search
-- Online Planning
-- During sim, updates estimated Q-function and # of times (s,a) pair is selected
-- After m sims, chooses action maximizing estimated Q-function
-- Exploration Strategy UCB1: Maximize --> Q(s,a) + c * sqrt(log(N(s)) / N(s, a))
-- As we take action, step into new sampled states using generative model
-- At unexplored state, initialize N(s,a) and Q(s,a) to 0 for each a, then return value estimate (Commonly estimated using policy rollout for n steps)
-'''
-
+from minichess.games.silverman45.board import Silverman45ChessBoard
+from minichess.games.abstract.board import AbstractBoardStatus
+from minichess.games.abstract.piece import PieceColor
+from minichess.players.gardner import RandomPlayer
 import math
+import random
 import numpy as np
+import copy
+from collections import defaultdict
 
 class MonteCarloTreeSearch:
-    def __init__(self, board, m=100, d=5, c=0.5, gamma=0.9):
+    def __init__(self, m=100, d=20, c=10, gamma=0.9):
         self.m = m # number of simulations
         self.d = d # depth
         self.c = c # exploration constant
         self.gamma = gamma # discount factor
 
-        self.board = board
-        self.S = []  # How do we define states and actions here?
-        
-        self.U = [0 for _ in range(len(self.S))] # value function estimate
-        self.Q = {} # action value estimates
-        self.N = {} # visit counts
+        self.Q = defaultdict(lambda:0) # action value estimates
+        self.N = {} # (s-a) visit counts
+        self.Ns = {} # state visit counts
 
-    # Performs m iterations of MCTS and returns set of actions with counts and Q-values
-    def run_search(self, s):
-        for _ in range(self.m):
-            self.simulate(s, self.d)
-        return {a: (self.Q[(s, a)], self.N[(s, a)])  for a in self.board.legal_moves}
+    # Performs m iterations of MCTS
+    def run_sims(self, state):
+        for i in range(self.m):
+            si = copy.deepcopy(state)    # This is slow, find a better way to do this
+            self.simulate(si, d=self.d)
+        return self.make_move(state)
 
-    def simulate(self, s, d=5):
+    def make_move(self, s):
+        s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
+        return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] for a in s.condensed_legal_actions()])]
+
+    def simulate(self, s, turn=0, d=5):
+        s_rep = s.state_representation() + str(turn)
+        if s.status != AbstractBoardStatus.ONGOING:
+            return 100
         if d <= 0:
-            return self.U(s)
-        if (s, self.board.legal_moves[0]) not in self.N:
-            for a in self.board.legal_moves:
-                self.N[(s, a)] = 0
-                self.Q[(s, a)] = 0.0
-            return self.U(s)
+            return s.get_white_utility() if turn == 1 else s.get_black_utility()
         
-        a = self.explore(s)
-        s_prime, r = self.TR(s, a)
-        q = r + self.gamma * self.simulate(s_prime, d - 1)
+        if (s_rep, s.condensed_legal_actions()[0]) not in self.N:
+            for a in s.condensed_legal_actions():
+                self.N[(s_rep, a)] = 0
+                self.Q[(s_rep, a)] = 0.0
+            return s.get_white_utility() if turn == 1 else s.get_black_utility()
+        
+        a = self.explore(s, turn)
+        s.push(a)
+            
+        reward = s.get_white_utility() if turn == 0 else s.get_black_utility()
+        q = reward + self.gamma * self.simulate(s, 1 - turn, d - 1)
 
-        self.N[(s, a)] += 1
-        self.Q[(s, a)] += (q - self.Q[(s, a)]) / self.N[(s, a)]
-        return q
-
-    # How do we get this?
-    def TR(self, s, a):
-        return 0, 0
+        a_rep = s.condensed_action(a)
+        self.N[(s_rep, a_rep)] += 1
+        self.Q[(s_rep, a_rep)] += (q - self.Q[(s_rep, a_rep)]) / self.N[(s_rep, a_rep)]
+        return -q
 
     # UCB1 Exploration Policy
     # --------------------------------
     def bonus(self, nsa, ns):
         return float('inf') if nsa == 0 else math.sqrt(math.log(ns) / nsa)
 
-    def explore(self, s):
-        ns = sum(self.N[(s, a)] for a in self.board.legal_moves)
-        return self.board.legal_moves[np.argmax([self.Q[(s, a)] + self.c * self.bonus(self.N[(s, a)], ns) for a in self.board.legal_moves])]
+    def explore(self, s, turn):
+        s_rep = s.state_representation() + str(turn)
+        ns = sum(self.N[(s_rep, a)] for a in s.condensed_legal_actions())
+        return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] + self.c * self.bonus(self.N[(s_rep, a)], ns) for a in s.condensed_legal_actions()])]
     # --------------------------------
+# ------------------------------------------------------------------------------------------------
 
 
-def main():
-    board = None # Insert board implementation here
-    MCTS = MonteCarloTreeSearch(board)
 
-if __name__ == "__main__":
-    main()
+
+
+
+# ------------------------------------------------------------------------------------------------
+# class GradientQLearning:
+#     def __init__(self, gamma=0.95, alpha=0.9):
+#         self.B = 8
+#         self.t = 0
+#         self.T = np.zeros(self.B) + 0.1
+#         self.gradQ = np.zeros(list(current) + [self.B])
+#         for i in range(current[0]):
+#             for j in range(current[1]):
+#                 self.gradQ[i][j] = self.gradientQ(i + 1, j + 1)
+#         self.gamma = gamma
+#         self.alpha = alpha
+    
+#     def gradientQ(self, s, a):
+#         return np.array([1, s, s**2, s*a, a, a**2, s**2*a, a**2*s])
+
+#     def Q(self, s, a):
+#         return self.gradQ[(s, a)] @ self.T
+
+#     def scale_gradient(self, d):
+#         return min(1 / np.linalg.norm(d), 1) * d
+
+#     def update(self, d):
+#         s, a, r, sp = d['s'], d['a'], d['r'], d['sp']
+#         u = max(self.Q(sp, ap) for ap in range(current[1]))
+#         diff = r + self.gamma * u - self.Q(s, a)
+#         self.t += diff
+#         self.T += self.alpha * self.scale_gradient(diff * self.gradQ[(s, a)])
+                        
+#     def return_policy(self):
+#         Q = np.zeros(current)
+#         for i in range(current[0]):
+#             for j in range(current[1]):
+#                 Q[i][j] = self.Q(i, j)
+#         return [np.argmax(Q[i]) + 1 for i in range(len(Q))]
