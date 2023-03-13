@@ -9,6 +9,8 @@ import random
 import numpy as np
 import copy
 from collections import defaultdict
+import pickle
+import os
 
 class MonteCarloTreeSearch:
     def __init__(self, m=100, d=10, c=10, gamma=0.9):
@@ -21,6 +23,31 @@ class MonteCarloTreeSearch:
         self.N = {} # (s-a) visit counts
         self.Ns = {} # s visit counts
 
+        self.Q_file = "saved_MCTS_Q.pkl"
+        self.N_file = "saved_MCTS_N.pkl"
+        self.Ns_file = "saved_MCTS_Ns.pkl"
+
+        if os.path.isfile(self.Q_file):
+            print("Loading Q data from saved pickle...")
+            with open(self.Q_file, 'rb') as f:
+                self.Q = pickle.load(f)
+        else:   
+            self.Q = {} # action value estimates
+
+        if os.path.isfile(self.N_file):
+            print("Loading N data from saved pickle...")
+            with open(self.N_file, 'rb') as f:
+                self.N = pickle.load(f)
+        else:   
+            self.N = {} # action value estimates
+
+        if os.path.isfile(self.Ns_file):
+            print("Loading Ns data from saved pickle...")
+            with open(self.Ns_file, 'rb') as f:
+                self.Ns = pickle.load(f)
+        else:   
+            self.Ns = {} # action value estimates
+
     # Performs m iterations of MCTS
     def run_sims(self, state):
         s = time.time()
@@ -29,6 +56,12 @@ class MonteCarloTreeSearch:
             si = copy.deepcopy(state)
             self.simulate(si, turn=turn, d=self.d)
         print(time.time() - s)
+        with open(self.Q_file, "wb") as f:
+            pickle.dump(self.Q, f)
+        with open(self.N_file, "wb") as f:
+            pickle.dump(self.N, f)
+        with open(self.Ns_file, "wb") as f:
+            pickle.dump(self.Ns, f)
         return self.make_move(state)
 
     def get_move_info(self, s):
