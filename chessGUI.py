@@ -1,5 +1,6 @@
 import tkinter
 import time
+import random
 from tkinter import *
 from PIL import Image, ImageTk
 from MCTS import MonteCarloTreeSearch
@@ -17,6 +18,7 @@ image_names = ["white_pawn", "white_rook", "white_queen", "white_king", "black_p
 m = MonteCarloTreeSearch()
 game = Silverman45ChessBoard()
 p = RandomPlayer()
+wld = [0, 0, 0]
 turn = 0
 # ----------------------------------------
 
@@ -27,7 +29,7 @@ def possible_actions_string():
     actions = game.legal_actions()
     info = m.get_move_info(game)
     for i in range(len(actions)):
-        s += str(i+1) + ". " + str(actions[i]) + " --- Q(s, a) = " + str(info[i][0]) + ",  N(s, a) = " + str(info[i][1]) + "\n"
+        s += str(i+1) + ". " + str(actions[i]) + " --- Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
     return s
 
 root = Tk()
@@ -39,6 +41,7 @@ game_status_var = StringVar(root, "Game Status: AbstractBoardStatus.ONGOING\n")
 white_utility_var = StringVar(root, "White Utility: 0.0")
 black_utility_var = StringVar(root, "Black Utility: -0.0\n")
 possible_actions_var = StringVar(root, possible_actions_string())
+wld_var = StringVar(root, "0 - 0 - 0 (Wins, Losses, Draws)")
 
 # Establish Main Frames
 top_frame = Frame(root, width=1000, height=50, pady=3)
@@ -81,11 +84,13 @@ game_status = Label(ctr_mid, textvariable=game_status_var, font=('Modern', 16, '
 white_utility = Label(ctr_mid, textvariable=white_utility_var, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
 black_utility = Label(ctr_mid, textvariable=black_utility_var, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
 possible_actions = Label(ctr_mid, textvariable=possible_actions_var, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
+wld_label = Label(ctr_mid, textvariable=wld_var, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
 
 game_status.grid(sticky = W, column=0, row=0)
 white_utility.grid(sticky = W, column=0, row=1)
 black_utility.grid(sticky = W, column=0, row=2)
 possible_actions.grid(sticky = W, column=0, row=3)
+wld_label.grid(sticky = W, column=0, row=4)
 
 ctr_right = Frame(center, width=100, height=600, padx=3, pady=3)
 
@@ -102,10 +107,10 @@ def update_board():
     if game.status == AbstractBoardStatus.ONGOING:
         if turn == 0:
             _, proposed = p.propose_action(game, None, game.legal_action_mask())
-            print("MOVE (Random):", proposed)
+            #print("MOVE (Random):", proposed)
         if turn == 1:
             proposed = m.run_sims(game)
-            print("MOVE (MCTS):", proposed)
+            #print("MOVE (MCTS):", proposed)
         turn = 1 - turn
         game.push(proposed)
     l = game.populate_board()
@@ -117,17 +122,22 @@ def update_board():
     black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
 
 def run_game():
-    global root
+    global root, wld
     global game, turn, board_tiles
     global game_status_var, white_utility_var, black_utility_var
+
+    turn = random.randint(0, 1)
+    init_turn = turn
+    if turn == 0:
+        print("Random - WHITE, MCTS - BLACK")
+    else:
+        print("MCTS - WHITE, Random - BLACK")
 
     while game.status == AbstractBoardStatus.ONGOING:
         if turn == 0:
             _, proposed = p.propose_action(game, None, game.legal_action_mask())
-            print("MOVE (Random):", proposed)
         if turn == 1:
             proposed = m.run_sims(game)
-            print("MOVE (MCTS):", proposed)
         turn = 1 - turn
         game.push(proposed)
         l = game.populate_board()
@@ -138,8 +148,20 @@ def run_game():
         white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
         black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
         possible_actions_var.set(possible_actions_string())
+        wld_var.set(str(wld[0]) + " - " + str(wld[1]) + " - "  + str(wld[2]) + " (Wins, Losses, Draws)")
         root.update()
-        time.sleep(0.1)
+    time.sleep(2)
+    if game.status == AbstractBoardStatus.BLACK_WIN:
+        return 0 if init_turn == 0 else 1
+    elif game.status == AbstractBoardStatus.WHITE_WIN:
+        return 1 if init_turn == 0 else 0
+    return 2
+    
+def run_100_games():
+    global wld
+    for i in range(100):
+        wld[run_game()] += 1
+        restart_game()
 
 def restart_game():
     global root
@@ -161,9 +183,11 @@ def restart_game():
 # Handle Bottom Frame
 update = Button(btm_frame, text="Step Game", command=update_board)
 run = Button(btm_frame, text="Run Full Game", command=run_game)
+run100 = Button(btm_frame, text="Run 100 Games", command=run_100_games)
 restart = Button(btm_frame, text="Restart Game", command=restart_game)
 update.grid(column=0, row=0)
 run.grid(column=1, row=0)
 restart.grid(column=2, row=0)
+run100.grid(column=3, row=0)
 
 root.mainloop()

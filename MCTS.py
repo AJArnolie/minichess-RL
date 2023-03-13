@@ -4,47 +4,55 @@ from minichess.games.abstract.action import AbstractActionFlags
 from minichess.games.abstract.piece import PieceColor
 from minichess.players.gardner import RandomPlayer
 import math
+import time
 import random
 import numpy as np
 import copy
 from collections import defaultdict
 
 class MonteCarloTreeSearch:
-    def __init__(self, m=100, d=20, c=10, gamma=0.9):
+    def __init__(self, m=100, d=10, c=10, gamma=0.9):
         self.m = m # number of simulations
         self.d = d # depth
         self.c = c # exploration constant
         self.gamma = gamma # discount factor
 
-        self.Q = defaultdict(lambda:0) # action value estimates
-        self.N = defaultdict(lambda:0) # (s-a) visit counts
+        self.Q = {} # action value estimates
+        self.N = {} # (s-a) visit counts
+        self.Ns = {} # s visit counts
 
     # Performs m iterations of MCTS
     def run_sims(self, state):
+        s = time.time()
         turn = 0 if state.active_color == PieceColor.WHITE else 1
         for i in range(self.m):
-            si = copy.deepcopy(state)    # This is slow, find a better way to do this
+            si = copy.deepcopy(state)
             self.simulate(si, turn=turn, d=self.d)
+        print(time.time() - s)
         return self.make_move(state)
 
     def get_move_info(self, s):
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
-        return [(self.Q[(s_rep, a)], self.N[(s_rep, a)]) for a in s.condensed_legal_actions()]
+        return [(self.Q.get((s_rep, a), 0), self.N.get((s_rep, a), 0)) for a in s.condensed_legal_actions()]
 
     def make_move(self, s):
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
-        return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] for a in s.condensed_legal_actions()])]
+        return s.legal_actions()[np.argmax([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])]
 
     def simulate(self, s, turn=0, d=5):
         s_rep = s.state_representation() + str(turn)
         # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
-            return 50
+            if s.status == AbstractBoardStatus.DRAW:
+                return -50
+            else:
+                return 100
         # Reached max depth, return estimated utility
         if d <= 0: 
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
         
-        if (s_rep, s.condensed_legal_actions()[0]) not in self.N:
+        if s_rep not in self.Ns:
+            self.Ns[s_rep] = 0
             for a in s.condensed_legal_actions():
                 self.N[(s_rep, a)] = 0
                 self.Q[(s_rep, a)] = 0.0
@@ -52,19 +60,17 @@ class MonteCarloTreeSearch:
 
         a = self.explore(s, turn)
 
-        reward = 0
         check, checkmate = s._is_checking_action(a, s.active_color)
-        if AbstractActionFlags.CAPTURE in a.modifier_flags:
-            reward += 1
-        if AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags:
-            reward += 1
-        reward += int(check) + int(checkmate) * 5
-
+        reward = int(check) + int(checkmate) * 5
+        reward += int(AbstractActionFlags.CAPTURE in a.modifier_flags) + int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags)
+        
         s.push(a)
+
         q = reward + self.gamma * self.simulate(s, 1 - turn, d - 1)
 
         a_rep = s.condensed_action(a)
         self.N[(s_rep, a_rep)] += 1
+        self.Ns[s_rep] += 1
         self.Q[(s_rep, a_rep)] += (q - self.Q[(s_rep, a_rep)]) / self.N[(s_rep, a_rep)]
         return -q
 
@@ -75,8 +81,7 @@ class MonteCarloTreeSearch:
 
     def explore(self, s, turn):
         s_rep = s.state_representation() + str(turn)
-        ns = sum(self.N[(s_rep, a)] for a in s.condensed_legal_actions())
-        return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] + self.c * self.bonus(self.N[(s_rep, a)], ns) for a in s.condensed_legal_actions()])]
+        return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] + self.c * self.bonus(self.N[(s_rep, a)], self.Ns[s_rep]) for a in s.condensed_legal_actions()])]
     # --------------------------------
 # ------------------------------------------------------------------------------------------------
 
@@ -107,7 +112,10 @@ class MonteCarloTreeSearchWithFunctionApprox:
         s_rep = s.state_representation() + str(turn)
         # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
-            return 100
+            if s.status == AbstractBoardStatus.DRAW:
+                return -10
+            else:
+                return 100
         # Reached max depth, return estimated utility
         if d <= 0: 
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
