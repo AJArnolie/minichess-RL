@@ -47,7 +47,7 @@ class MonteCarloTreeSearch:
         if (s_rep, s.condensed_legal_actions()[0]) not in self.N:
             for a in s.condensed_legal_actions():
                 self.N[(s_rep, a)] = 0
-                self.Q[(s_rep, a)] = s.get_white_utility() if turn == 1 else s.get_black_utility()
+                self.Q[(s_rep, a)] = 0.0
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
 
         a = self.explore(s, turn)
