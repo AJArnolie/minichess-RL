@@ -117,7 +117,6 @@ def update_board():
     global game, turn, board_tiles
     global game_status_var, white_utility_var, black_utility_var
 
-    possible_actions_var.set(possible_actions_string())
     if game.status == AbstractBoardStatus.ONGOING:
         if turn == 0:
             if player2.get() == "MCTS":
@@ -135,6 +134,7 @@ def update_board():
     for i in range(len(l)):
         board_tiles[i // 4][i % 4].delete('all')
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
+    possible_actions_var.set(possible_actions_string())
     game_status_var.set('Game Status: ' + str(game.status) + "\n")
     white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
     black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
