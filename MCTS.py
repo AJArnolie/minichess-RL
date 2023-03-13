@@ -70,11 +70,12 @@ class MonteCarloTreeSearch:
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         return [(self.Q.get((s_rep, a), 0), self.N.get((s_rep, a), 0)) for a in s.condensed_legal_actions()]
 
-    def make_move(self, s, softmax = True, scale = 5): # scale controls exploration vs. exploitation, higher scale -> gredy
+    def make_move(self, s, softmax = True, scale = 1): # scale controls exploration vs. exploitation, higher scale -> gredy
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         q_vals = np.array([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])
         if softmax:
             softmax_q = numpy_scaled_softmax(q_vals, scale)
+            # print(softmax_q)
             return np.random.choice(s.legal_actions(), p = softmax_q)
         else:
             return s.legal_actions()[np.argmax(q_vals)]
