@@ -70,16 +70,24 @@ class MonteCarloTreeSearch:
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         return [(self.Q.get((s_rep, a), 0), self.N.get((s_rep, a), 0)) for a in s.condensed_legal_actions()]
 
+<<<<<<< HEAD
     def make_move(self, s, softmax = True, scale = 10): # scale controls exploration vs. exploitation, higher scale -> gredy
+=======
+    def make_move(self, s, softmax = True, scale = 3): # scale controls exploration vs. exploitation, higher scale -> greedy
+>>>>>>> 2baf448595b29d33ea7293683584fd07326c92eb
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
-        q_vals = np.array([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])
+        NUM_CANDIDATES = 3
         if softmax:
+            condensed_legal_actions = s.condensed_legal_actions()
+            legal_actions = s.legal_actions()
+            a_q_pairs = [(legal_actions[i], self.Q.get((s_rep, condensed_legal_actions[i]), 0)) for i in range(len(condensed_legal_actions))]
+            candidate_moves = sorted(a_q_pairs, key = lambda x: x[1], reverse=True)[:NUM_CANDIDATES]
+            actions = np.array([c[0] for c in candidate_moves])
+            q_vals = np.array([c[1] for c in candidate_moves])
             softmax_q = numpy_scaled_softmax(q_vals, scale)
-            # print(softmax_q)
-            print(softmax_q)
-            return np.random.choice(s.legal_actions(), p = softmax_q)
+            return np.random.choice(actions, p = softmax_q)
         else:
-            return s.legal_actions()[np.argmax(q_vals)]
+            return s.legal_actions()[np.argmax([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])]
 
     def simulate(self, s, turn=0, d=20):
         s_rep = s.state_representation() + str(turn)
