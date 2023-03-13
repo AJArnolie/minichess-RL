@@ -1,5 +1,6 @@
 from minichess.games.silverman45.board import Silverman45ChessBoard
 from minichess.games.abstract.board import AbstractBoardStatus
+from minichess.games.abstract.action import AbstractActionFlags
 from minichess.games.abstract.piece import PieceColor
 from minichess.players.gardner import RandomPlayer
 import math
@@ -16,14 +17,19 @@ class MonteCarloTreeSearch:
         self.gamma = gamma # discount factor
 
         self.Q = defaultdict(lambda:0) # action value estimates
-        self.N = {} # (s-a) visit counts
+        self.N = defaultdict(lambda:0) # (s-a) visit counts
 
     # Performs m iterations of MCTS
     def run_sims(self, state):
+        turn = 0 if state.active_color == PieceColor.WHITE else 1
         for i in range(self.m):
             si = copy.deepcopy(state)    # This is slow, find a better way to do this
-            self.simulate(si, d=self.d)
+            self.simulate(si, turn=turn, d=self.d)
         return self.make_move(state)
+
+    def get_move_info(self, s):
+        s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
+        return [(self.Q[(s_rep, a)], self.N[(s_rep, a)]) for a in s.condensed_legal_actions()]
 
     def make_move(self, s):
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
@@ -33,7 +39,7 @@ class MonteCarloTreeSearch:
         s_rep = s.state_representation() + str(turn)
         # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
-            return 100
+            return 50
         # Reached max depth, return estimated utility
         if d <= 0: 
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
@@ -43,11 +49,18 @@ class MonteCarloTreeSearch:
                 self.N[(s_rep, a)] = 0
                 self.Q[(s_rep, a)] = 0.0
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
-        
+
         a = self.explore(s, turn)
+
+        reward = 0
+        check, checkmate = s._is_checking_action(a, s.active_color)
+        if AbstractActionFlags.CAPTURE in a.modifier_flags:
+            reward += 1
+        if AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags:
+            reward += 1
+        reward += int(check) + int(checkmate) * 5
+
         s.push(a)
-            
-        reward = s.get_white_utility() if turn == 0 else s.get_black_utility()
         q = reward + self.gamma * self.simulate(s, 1 - turn, d - 1)
 
         a_rep = s.condensed_action(a)

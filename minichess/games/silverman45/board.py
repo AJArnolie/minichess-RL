@@ -271,6 +271,22 @@ class Silverman45ChessBoard(AbstractChessBoard):
                 elif c[11] == 1: rep += "K"
                 else: rep += "O"
         return rep
+    
+    def populate_board(self): # Make this more efficient
+        rep = []
+        board = self.state_vector()
+        for row in board:
+            for c in row:
+                if c[0] == 1: rep += [0]
+                elif c[3] == 1: rep += [1]
+                elif c[4] == 1: rep += [2]
+                elif c[5] == 1: rep += [3]
+                elif c[6] == 1: rep += [4]
+                elif c[9] == 1: rep += [5]
+                elif c[10] == 1: rep += [6]
+                elif c[11] == 1: rep += [7]
+                else: rep += [None]
+        return rep
 
     def state_vector(self) -> np.array:
         return np.concatenate([
