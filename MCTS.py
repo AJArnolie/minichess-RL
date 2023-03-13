@@ -8,6 +8,8 @@ import random
 import numpy as np
 import copy
 from collections import defaultdict
+import pickle
+import os
 
 class MonteCarloTreeSearch:
     def __init__(self, m=100, d=20, c=10, gamma=0.9):
@@ -16,7 +18,17 @@ class MonteCarloTreeSearch:
         self.c = c # exploration constant
         self.gamma = gamma # discount factor
 
-        self.Q = defaultdict(lambda:0) # action value estimates
+        self.Q_file = "saved_MCTS_Q.pkl"
+        if os.path.isfile(self.Q_file):
+            print("loading from saved pickle")
+            with open(self.Q_file, 'rb') as f:
+                self.Q = pickle.load(f)
+                # for key in self.Q.keys():
+                #     if self.Q[key] != 0:
+                #         print(key, self.Q[key])
+        else:   
+            self.Q = defaultdict(int) # action value estimates
+        
         self.N = defaultdict(lambda:0) # (s-a) visit counts
 
     # Performs m iterations of MCTS
@@ -25,6 +37,8 @@ class MonteCarloTreeSearch:
         for i in range(self.m):
             si = copy.deepcopy(state)    # This is slow, find a better way to do this
             self.simulate(si, turn=turn, d=self.d)
+        with open(self.Q_file, "wb") as f:
+            pickle.dump(self.Q, f)
         return self.make_move(state)
 
     def get_move_info(self, s):
