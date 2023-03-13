@@ -4,6 +4,9 @@ def numpy_softmax(x):
     ''' Basic numpy implementation of softmax over a 1-D vector. '''
     return np.exp(x) / sum(np.exp(x))
 
+def numpy_scaled_softmax(x, scale):
+    return np.exp(scale * x) / sum(np.exp(scale * x))
+
 def surrounding_pieces(pos_tup, board, return_pos=False):
     row,col = pos_tup
     pieces = []
