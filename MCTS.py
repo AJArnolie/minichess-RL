@@ -15,7 +15,7 @@ import pickle
 import os
 
 class MonteCarloTreeSearch:
-    def __init__(self, m=100, d=10, c=10, gamma=0.9):
+    def __init__(self, m=100, d=30, c=5, gamma=0.9):
         self.m = m # number of simulations
         self.d = d # depth
         self.c = c # exploration constant
@@ -70,22 +70,23 @@ class MonteCarloTreeSearch:
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         return [(self.Q.get((s_rep, a), 0), self.N.get((s_rep, a), 0)) for a in s.condensed_legal_actions()]
 
-    def make_move(self, s, softmax = True, scale = 1): # scale controls exploration vs. exploitation, higher scale -> gredy
+    def make_move(self, s, softmax = True, scale = 10): # scale controls exploration vs. exploitation, higher scale -> gredy
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         q_vals = np.array([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])
         if softmax:
             softmax_q = numpy_scaled_softmax(q_vals, scale)
             # print(softmax_q)
+            print(softmax_q)
             return np.random.choice(s.legal_actions(), p = softmax_q)
         else:
             return s.legal_actions()[np.argmax(q_vals)]
 
-    def simulate(self, s, turn=0, d=5):
+    def simulate(self, s, turn=0, d=20):
         s_rep = s.state_representation() + str(turn)
         # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
             if s.status == AbstractBoardStatus.DRAW:
-                return -50
+                return -30
             else:
                 return 100
         # Reached max depth, return estimated utility
@@ -102,8 +103,13 @@ class MonteCarloTreeSearch:
         a = self.explore(s, turn)
 
         check, checkmate = s._is_checking_action(a, s.active_color)
-        reward = int(check) + int(checkmate) * 5
-        reward += int(AbstractActionFlags.CAPTURE in a.modifier_flags) + int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags)
+        reward = int(check) / 10.0 + int(checkmate) * 5
+        #print("Check Term: " + str(int(check) / 10.0 + int(checkmate) * 5))
+        reward += int(AbstractActionFlags.CAPTURE in a.modifier_flags) / 10.0 + int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 10.0
+        # print("Capture Term: " + str(int(AbstractActionFlags.CAPTURE in a.modifier_flags) / 10.0))
+        # print("Promote Term: " + str(int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 10.0))
+        reward += (s.get_white_utility() if turn == 0 else s.get_black_utility()) / 5.0
+        # print("Utility Term: " + str((s.get_white_utility() if turn == 0 else s.get_black_utility()) / 5.0))
         
         s.push(a)
 

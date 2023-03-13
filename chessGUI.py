@@ -22,15 +22,7 @@ wld = [0, 0, 0]
 turn = random.randint(0, 1)
 # ----------------------------------------
 
-def possible_actions_string():
-    global m
-    global game
-    s = "Possible Actions:\n"
-    actions = game.legal_actions()
-    info = m.get_move_info(game)
-    for i in range(len(actions)):
-        s += str(i+1) + ". " + str(actions[i]) + " Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
-    return s
+
 
 root = Tk()
 root.geometry("1000x700")
@@ -40,13 +32,26 @@ images = [PhotoImage(file = IMAGE_PREFIX + i + IMAGE_TYPE) for i in image_names]
 game_status_var = StringVar(root, "Game Status: AbstractBoardStatus.ONGOING\n")
 white_utility_var = StringVar(root, "White Utility: 0.0")
 black_utility_var = StringVar(root, "Black Utility: -0.0\n")
-possible_actions_var = StringVar(root, possible_actions_string())
 wld_var = StringVar(root, "0 - 0 - 0 (Wins, Losses, Draws)\n\n")
 white_player_name = StringVar(root, "White Player: ")
 black_player_name = StringVar(root, "Black Player: \n\n")
 update_Qvalues = StringVar(root, "Update Q")
 player1 = StringVar(root, "MCTS")
 player2 = StringVar(root, "Random")
+selected = StringVar(root, "")
+
+def possible_actions_string():
+    global m
+    global game
+    s = "Possible Actions:\n"
+    actions = game.legal_actions()
+    info = m.get_move_info(game)
+    for i in range(len(actions)):
+        s += str(i+1) + ". " + str(actions[i]) + " Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
+    s += "\nAction Selected: " + selected.get()
+    return s
+
+possible_actions_var = StringVar(root, possible_actions_string())
 
 if turn == 0:
     white_player_name.set('White Player: ' + player2.get())
@@ -128,13 +133,14 @@ def update_board():
                 proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
             else:
                 _, proposed = p.propose_action(game, None, game.legal_action_mask())
-        turn = 1 - turn
+        turn = 1 - turn    
+        selected.set(proposed)
+        possible_actions_var.set(possible_actions_string())
         game.push(proposed)
     l = game.populate_board()
     for i in range(len(l)):
         board_tiles[i // 4][i % 4].delete('all')
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
-    possible_actions_var.set(possible_actions_string())
     game_status_var.set('Game Status: ' + str(game.status) + "\n")
     white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
     black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
@@ -173,6 +179,7 @@ def run_game():
         game_status_var.set('Game Status: ' + str(game.status) + "\n")
         white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
         black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
+        selected.set(proposed)
         possible_actions_var.set(possible_actions_string())
         wld_var.set(str(wld[0]) + " - " + str(wld[1]) + " - "  + str(wld[2]) + " (Wins, Losses, Draws)\n\n")
         root.update()
@@ -208,6 +215,7 @@ def restart_game():
     game_status_var.set('Game Status: ' + str(game.status) + "\n")
     white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
     black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
+    selected.set("")
     possible_actions_var.set(possible_actions_string())
     root.update()
 
