@@ -12,8 +12,7 @@ DARK_COLOR = "#ebecd0"
 LIGHT_COLOR = "#779556"
 IMAGE_PREFIX = "./images/"
 IMAGE_TYPE = ".png"
-
-image_names = ["white_pawn", "white_rook", "white_queen", "white_king", "black_pawn", "black_rook", "black_queen", "black_king"]
+IMAGE_NAMES = ["white_pawn", "white_rook", "white_queen", "white_king", "black_pawn", "black_rook", "black_queen", "black_king"]
 
 m = MonteCarloTreeSearch()
 game = Silverman45ChessBoard()
@@ -22,13 +21,13 @@ wld = [0, 0, 0]
 turn = random.randint(0, 1)
 # ----------------------------------------
 
-
-
 root = Tk()
 root.geometry("1000x700")
 root.resizable(False, False)
-images = [PhotoImage(file = IMAGE_PREFIX + i + IMAGE_TYPE) for i in image_names]
 
+images = [PhotoImage(file = IMAGE_PREFIX + i + IMAGE_TYPE) for i in IMAGE_NAMES]
+
+# Defining GUI Variables
 game_status_var = StringVar(root, "Game Status: AbstractBoardStatus.ONGOING\n")
 white_utility_var = StringVar(root, "White Utility: 0.0")
 black_utility_var = StringVar(root, "Black Utility: -0.0\n")
@@ -37,7 +36,7 @@ white_player_name = StringVar(root, "White Player: ")
 black_player_name = StringVar(root, "Black Player: \n\n")
 update_Qvalues = StringVar(root, "Update Q")
 player1 = StringVar(root, "MCTS")
-player2 = StringVar(root, "Random")
+player2 = StringVar(root, "MCTS")
 selected = StringVar(root, "")
 
 def possible_actions_string():
@@ -48,22 +47,18 @@ def possible_actions_string():
     info = m.get_move_info(game)
     for i in range(len(actions)):
         s += str(i+1) + ". " + str(actions[i]) + " Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
-    s += "\nAction Selected: " + selected.get()
+    s += "\nAction Selected: " + selected.get() + " by " + ("Black" if turn == 1 else "White")
     return s
 
 possible_actions_var = StringVar(root, possible_actions_string())
 
-if turn == 0:
-    white_player_name.set('White Player: ' + player2.get())
-    black_player_name.set('Black Player: ' + player1.get() + "\n\n")
-else:
-    white_player_name.set('White Player: ' + player1.get())
-    black_player_name.set('Black Player: ' + player2.get() + "\n\n")
+white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
+black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
 
 # Establish Main Frames
 top_frame = Frame(root, width=1000, height=50, pady=3)
-center = Frame(root, bg='gray2', width=1000, height=40, padx=3, pady=3)
-btm_frame = Frame(root, bg='white', width=1000, height=45, pady=3)
+center = Frame(root, bg='black', width=1000, height=40, padx=3, pady=3)
+btm_frame = Frame(root, bg='#ececec', width=1000, height=45, pady=3)
 
 # layout all of the main containers
 root.grid_rowconfigure(1, weight=1)
@@ -71,7 +66,7 @@ root.grid_columnconfigure(0, weight=1)
 
 top_frame.grid(row=0, sticky="ew")
 center.grid(row=1, sticky="nsew")
-btm_frame.grid(row=3, sticky="ew")
+btm_frame.grid(row=2, sticky="ew")
 
 # create the widgets for the top frame
 title_label = Label(root, text='Silverman 4X5 Minichess Simulator', font=('Modern', 18, 'bold'))
@@ -110,13 +105,8 @@ white_utility.grid(sticky = W, column=0, row=4)
 black_utility.grid(sticky = W, column=0, row=5)
 possible_actions.grid(sticky = W, column=0, row=6)
 
-
-ctr_right = Frame(center, width=100, height=600, padx=3, pady=3)
-
 board.grid(row=0, column=0, sticky="ns", pady=10)
 ctr_mid.grid(row=0, column=1, sticky="nsew")
-ctr_right.grid(row=0, column=2, sticky="ns")
-
 
 def update_board():
     global game, turn, board_tiles
@@ -133,8 +123,8 @@ def update_board():
                 proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
             else:
                 _, proposed = p.propose_action(game, None, game.legal_action_mask())
-        turn = 1 - turn    
         selected.set(proposed)
+        turn = 1 - turn    
         possible_actions_var.set(possible_actions_string())
         game.push(proposed)
     l = game.populate_board()
@@ -171,6 +161,9 @@ def run_game():
             else:
                 _, proposed = p.propose_action(game, None, game.legal_action_mask())
         turn = 1 - turn
+        print(proposed)
+        selected.set(proposed)
+        possible_actions_var.set(possible_actions_string())
         game.push(proposed)
         l = game.populate_board()
         for i in range(len(l)):
@@ -179,8 +172,6 @@ def run_game():
         game_status_var.set('Game Status: ' + str(game.status) + "\n")
         white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
         black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
-        selected.set(proposed)
-        possible_actions_var.set(possible_actions_string())
         wld_var.set(str(wld[0]) + " - " + str(wld[1]) + " - "  + str(wld[2]) + " (Wins, Losses, Draws)\n\n")
         root.update()
     if game.status == AbstractBoardStatus.BLACK_WIN:
@@ -191,8 +182,9 @@ def run_game():
     
 def run_100_games():
     global wld
-    for i in range(100):
+    for _ in range(100):
         wld[run_game()] += 1
+        root.update()
         restart_game()
 
 def restart_game():
@@ -243,7 +235,7 @@ p1.grid(column=8, row=0)
 p2_text.grid(column=9, row=0)
 p2.grid(column=10, row=0)
 
-exit_button = Button(btm_frame, text="Exit", command=root.destroy)
+exit_button = Button(btm_frame, text="Exit", command=root.destroy, fg="red")
 exit_button.grid(column=11, row=0)
 
 root.mainloop()

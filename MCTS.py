@@ -13,9 +13,10 @@ import copy
 from collections import defaultdict
 import pickle
 import os
+total = 0
 
 class MonteCarloTreeSearch:
-    def __init__(self, m=100, d=30, c=5, gamma=0.9):
+    def __init__(self, m=50, d=10, c=5, gamma=0.95):
         self.m = m # number of simulations
         self.d = d # depth
         self.c = c # exploration constant
@@ -52,29 +53,27 @@ class MonteCarloTreeSearch:
 
     # Performs m iterations of MCTS
     def run_sims(self, state):
-        s = time.time()
+        global total
+        st = time.time()
+        s_rep = state.state_representation() + ("0" if state.active_color == PieceColor.WHITE else "1")
+        self.m = 50 if self.Ns[s_rep] > 50 else 300
         turn = 0 if state.active_color == PieceColor.WHITE else 1
         for i in range(self.m):
             si = copy.deepcopy(state)
             self.simulate(si, turn=turn, d=self.d)
-        print(time.time() - s)
         with open(self.Q_file, "wb") as f:
             pickle.dump(self.Q, f)
         with open(self.N_file, "wb") as f:
             pickle.dump(self.N, f)
         with open(self.Ns_file, "wb") as f:
             pickle.dump(self.Ns, f)
+        print(time.time() - st, total)
         return self.make_move(state)
 
     def get_move_info(self, s):
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         return [(self.Q.get((s_rep, a), 0), self.N.get((s_rep, a), 0)) for a in s.condensed_legal_actions()]
-
-<<<<<<< HEAD
-    def make_move(self, s, softmax = True, scale = 10): # scale controls exploration vs. exploitation, higher scale -> gredy
-=======
-    def make_move(self, s, softmax = True, scale = 3): # scale controls exploration vs. exploitation, higher scale -> greedy
->>>>>>> 2baf448595b29d33ea7293683584fd07326c92eb
+    def make_move(self, s, softmax = True, scale = 5): # scale controls exploration vs. exploitation, higher scale -> gredy
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         NUM_CANDIDATES = 3
         if softmax:
@@ -85,11 +84,14 @@ class MonteCarloTreeSearch:
             actions = np.array([c[0] for c in candidate_moves])
             q_vals = np.array([c[1] for c in candidate_moves])
             softmax_q = numpy_scaled_softmax(q_vals, scale)
+            print([str(a) for a in actions])
+            print(softmax_q)
             return np.random.choice(actions, p = softmax_q)
         else:
             return s.legal_actions()[np.argmax([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])]
 
     def simulate(self, s, turn=0, d=20):
+        global total
         s_rep = s.state_representation() + str(turn)
         # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
@@ -109,17 +111,15 @@ class MonteCarloTreeSearch:
             return s.get_white_utility() if turn == 1 else s.get_black_utility()
 
         a = self.explore(s, turn)
-
-        check, checkmate = s._is_checking_action(a, s.active_color)
-        reward = int(check) / 10.0 + int(checkmate) * 5
-        #print("Check Term: " + str(int(check) / 10.0 + int(checkmate) * 5))
-        reward += int(AbstractActionFlags.CAPTURE in a.modifier_flags) / 10.0 + int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 10.0
-        # print("Capture Term: " + str(int(AbstractActionFlags.CAPTURE in a.modifier_flags) / 10.0))
-        # print("Promote Term: " + str(int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 10.0))
-        reward += (s.get_white_utility() if turn == 0 else s.get_black_utility()) / 5.0
-        # print("Utility Term: " + str((s.get_white_utility() if turn == 0 else s.get_black_utility()) / 5.0))
         
+        check, _ = s._is_checking_action(a, s.active_color)
+        reward = int(check) / 5.0
+        reward += int(AbstractActionFlags.CAPTURE in a.modifier_flags) / 5.0 + int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 2.0
+        u = (s.get_white_utility() if turn == 0 else s.get_black_utility())
+
         s.push(a)
+
+        reward += ((s.get_white_utility() if turn == 0 else s.get_black_utility()) - u)
 
         q = reward + self.gamma * self.simulate(s, 1 - turn, d - 1)
 
@@ -129,15 +129,14 @@ class MonteCarloTreeSearch:
         self.Q[(s_rep, a_rep)] += (q - self.Q[(s_rep, a_rep)]) / self.N[(s_rep, a_rep)]
         return -q
 
-    # UCB1 Exploration Policy
-    # --------------------------------
+# UCB1 Exploration Policy
+# --------------------------------
     def bonus(self, nsa, ns):
         return float('inf') if nsa == 0 else math.sqrt(math.log(ns) / nsa)
 
     def explore(self, s, turn):
         s_rep = s.state_representation() + str(turn)
         return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] + self.c * self.bonus(self.N[(s_rep, a)], self.Ns[s_rep]) for a in s.condensed_legal_actions()])]
-    # --------------------------------
 # ------------------------------------------------------------------------------------------------
 
 
