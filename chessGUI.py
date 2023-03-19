@@ -1,34 +1,36 @@
-import tkinter
 import time
 import random
 from tkinter import *
 from PIL import Image, ImageTk
-from MCTS import MonteCarloTreeSearch
+from MCTS import MonteCarloTreeSearch, ForwardSearch
+from minichess.games.abstract.piece import PieceColor
 from minichess.games.silverman45.board import Silverman45ChessBoard
 from minichess.games.abstract.board import AbstractBoardStatus
 from minichess.players.gardner import RandomPlayer
 
 DARK_COLOR = "#ebecd0"
 LIGHT_COLOR = "#779556"
+BG_COLOR = "#ececec"
 IMAGE_PREFIX = "./images/"
 IMAGE_TYPE = ".png"
 IMAGE_NAMES = ["white_pawn", "white_rook", "white_queen", "white_king", "black_pawn", "black_rook", "black_queen", "black_king"]
 
 m = MonteCarloTreeSearch()
+f = ForwardSearch()
 game = Silverman45ChessBoard()
 p = RandomPlayer()
 wld = [0, 0, 0]
 turn = random.randint(0, 1)
-# ----------------------------------------
 
 root = Tk()
-root.geometry("1000x700")
+root.geometry("1000x710")
 root.resizable(False, False)
+root.title("Minichess Simulator")
 
 images = [PhotoImage(file = IMAGE_PREFIX + i + IMAGE_TYPE) for i in IMAGE_NAMES]
 
-# Defining GUI Variables
-game_status_var = StringVar(root, "Game Status: AbstractBoardStatus.ONGOING\n")
+# Define GUI Variables
+game_status_var = StringVar(root, "Game Status: ONGOING\n")
 white_utility_var = StringVar(root, "White Utility: 0.0")
 black_utility_var = StringVar(root, "Black Utility: -0.0\n")
 wld_var = StringVar(root, "0 - 0 - 0 (Wins, Losses, Draws)\n\n")
@@ -40,25 +42,21 @@ player2 = StringVar(root, "MCTS")
 selected = StringVar(root, "")
 
 def possible_actions_string():
-    global m
-    global game
     s = "Possible Actions:\n"
     actions = game.legal_actions()
     info = m.get_move_info(game)
-    for i in range(len(actions)):
+    for i in range(len(actions))[:10]:
         s += str(i+1) + ". " + str(actions[i]) + " Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
+    if len(actions) > 10: s += "...\n"
     s += "\nAction Selected: " + selected.get() + " by " + ("Black" if turn == 1 else "White")
     return s
 
 possible_actions_var = StringVar(root, possible_actions_string())
 
-white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
-black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
-
 # Establish Main Frames
 top_frame = Frame(root, width=1000, height=50, pady=3)
-center = Frame(root, bg='black', width=1000, height=40, padx=3, pady=3)
-btm_frame = Frame(root, bg='#ececec', width=1000, height=45, pady=3)
+center = Frame(root, bg="black", width=1000, height=600, padx=3, pady=3)
+btm_frame = Frame(root, bg=BG_COLOR, width=1000, height=45, pady=3)
 
 # layout all of the main containers
 root.grid_rowconfigure(1, weight=1)
@@ -70,7 +68,7 @@ btm_frame.grid(row=2, sticky="ew")
 
 # create the widgets for the top frame
 title_label = Label(root, text='Silverman 4X5 Minichess Simulator', font=('Modern', 18, 'bold'))
-title_label.grid(row=0, columnspan=3)
+title_label.grid(row=0, columnspan=2)
 
 # create the center widgets
 center.grid_rowconfigure(0, weight=1)
@@ -84,11 +82,10 @@ for i in range(5):
     for j in range(4):
         board_tiles[i][j] = Canvas(board, bg=(DARK_COLOR if (i+j) % 2 == 0 else LIGHT_COLOR), 
                                         width=120, height=120, highlightthickness=0)
-        if l[i*4+j] != None:
-            board_tiles[i][j].create_image(60, 60, image=images[l[i*4+j]])
+        if l[i*4+j] != None: board_tiles[i][j].create_image(60, 60, image=images[l[i*4+j]])
         board_tiles[i][j].grid(column=j, row=i)
 
-ctr_mid = Frame(center, width=250, height=600, padx=3, pady=3)
+ctr_mid = Frame(center, width=500, height=600, padx=3, pady=3, bg=BG_COLOR)
 white_player = Label(ctr_mid, textvariable=white_player_name, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
 black_player = Label(ctr_mid, textvariable=black_player_name, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
 game_status = Label(ctr_mid, textvariable=game_status_var, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
@@ -109,82 +106,54 @@ board.grid(row=0, column=0, sticky="ns", pady=10)
 ctr_mid.grid(row=0, column=1, sticky="nsew")
 
 def update_board():
-    global game, turn, board_tiles
-    global game_status_var, white_utility_var, black_utility_var
+    global root, game, turn, board_tiles
+    white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
+    black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
 
     if game.status == AbstractBoardStatus.ONGOING:
-        if turn == 0:
-            if player2.get() == "MCTS":
-                proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
-            else:
-                _, proposed = p.propose_action(game, None, game.legal_action_mask())
-        if turn == 1:
-            if player1.get() == "MCTS":
-                proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
-            else:
-                _, proposed = p.propose_action(game, None, game.legal_action_mask())
-        selected.set(proposed)
-        turn = 1 - turn    
+        if (player1.get() if turn == bool(game.active_color == PieceColor.WHITE) else player2.get()) == "MCTS":
+            proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
+            if proposed == "DRAW": return "DRAW"
+        elif (player1.get() if turn == bool(game.active_color == PieceColor.WHITE) else player2.get()) == "Forward":
+            proposed = f.make_move(game)
+        else:
+            _, proposed = p.propose_action(game, None, game.legal_action_mask()) 
+        selected.set(proposed)  
         possible_actions_var.set(possible_actions_string())
         game.push(proposed)
+ 
     l = game.populate_board()
     for i in range(len(l)):
         board_tiles[i // 4][i % 4].delete('all')
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
-    game_status_var.set('Game Status: ' + str(game.status) + "\n")
-    white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
-    black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
+    game_status_var.set('Game Status: ' + str(game.status).split('.')[1] + "\n")
+    white_utility_var.set('White Utility: ' + str(round(game.get_white_utility() * 10, 3)))
+    black_utility_var.set('Black Utility: ' + str(round(game.get_black_utility() * 10, 3)) + "\n")
+    root.update()
+    return None
 
 def run_game():
-    global root, wld
-    global game, turn, board_tiles
-    global game_status_var, white_utility_var, black_utility_var
-
+    st = time.time()
+    global wld, game, turn, board_tiles
+    restart_game()
     turn = random.randint(0, 1)
-    init_turn = turn
-    if turn == 0:
-        white_player_name.set('White Player: ' + player2.get())
-        black_player_name.set('Black Player: ' + player1.get() + "\n\n")
-    else:
-        white_player_name.set('White Player: ' + player1.get())
-        black_player_name.set('Black Player: ' + player2.get() + "\n\n")
+    white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
+    black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
+    val = None
+    while game.status == AbstractBoardStatus.ONGOING and val == None:
+        val = update_board()
+    if game.status == AbstractBoardStatus.BLACK_WIN: wld[turn] += 1
+    elif game.status == AbstractBoardStatus.WHITE_WIN: wld[1 - turn] += 1
+    else: wld[2] += 1
+    m.dump_data()
+    wld_var.set(str(wld[0]) + " - " + str(wld[1]) + " - "  + str(wld[2]) + " (Wins, Losses, Draws)\n\n")
+    root.update()
+    print("Game Time Length: ", time.time() - st)
 
-    while game.status == AbstractBoardStatus.ONGOING:
-        if turn == 0:
-            if player2.get() == "MCTS":
-                proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
-            else:
-                _, proposed = p.propose_action(game, None, game.legal_action_mask())
-        if turn == 1:
-            if player1.get() == "MCTS":
-                proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
-            else:
-                _, proposed = p.propose_action(game, None, game.legal_action_mask())
-        turn = 1 - turn
-        print(proposed)
-        selected.set(proposed)
-        possible_actions_var.set(possible_actions_string())
-        game.push(proposed)
-        l = game.populate_board()
-        for i in range(len(l)):
-            board_tiles[i // 4][i % 4].delete('all')
-            if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
-        game_status_var.set('Game Status: ' + str(game.status) + "\n")
-        white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
-        black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
-        wld_var.set(str(wld[0]) + " - " + str(wld[1]) + " - "  + str(wld[2]) + " (Wins, Losses, Draws)\n\n")
-        root.update()
-    if game.status == AbstractBoardStatus.BLACK_WIN:
-        return 0 if init_turn == 0 else 1
-    elif game.status == AbstractBoardStatus.WHITE_WIN:
-        return 1 if init_turn == 0 else 0
-    return 2
     
 def run_100_games():
-    global wld
     for _ in range(100):
-        wld[run_game()] += 1
-        root.update()
+        run_game()
         restart_game()
 
 def restart_game():
@@ -194,19 +163,16 @@ def restart_game():
 
     game = Silverman45ChessBoard()
     turn = random.randint(0, 1)
-    if turn == 0:
-        white_player_name.set('White Player: ' + player2.get())
-        black_player_name.set('Black Player: ' + player1.get() + "\n\n")
-    else:
-        white_player_name.set('White Player: ' + player1.get())
-        black_player_name.set('Black Player: ' + player2.get() + "\n\n")
+    white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
+    black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
+
     l = game.populate_board()
     for i in range(len(l)):
         board_tiles[i // 4][i % 4].delete('all')
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
-    game_status_var.set('Game Status: ' + str(game.status) + "\n")
-    white_utility_var.set('White Utility: ' + str(game.get_white_utility()))
-    black_utility_var.set('Black Utility: ' + str(game.get_black_utility()) + "\n")
+    game_status_var.set('Game Status: ' + str(game.status).split('.')[1] + "\n")
+    white_utility_var.set('White Utility: 0.0')
+    black_utility_var.set('Black Utility: -0.0\n')
     selected.set("")
     possible_actions_var.set(possible_actions_string())
     root.update()
@@ -225,7 +191,7 @@ options = ["Update Q", "Exploit Q"]
 drop = OptionMenu(btm_frame, update_Qvalues, *options)
 drop.grid(column=6, row=0)
 
-players = ["MCTS", "Random"]
+players = ["MCTS", "Forward", "Random"]
 p1 = OptionMenu(btm_frame, player1, *players)
 p2 = OptionMenu(btm_frame, player2, *players)
 p1_text = Label(btm_frame, text='  Player 1:', font=('Modern', 12, 'bold'))

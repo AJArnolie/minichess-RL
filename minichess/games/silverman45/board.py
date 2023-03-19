@@ -116,7 +116,6 @@ class Silverman45ChessBoard(AbstractChessBoard):
         return True
 
     def push(self, action: AbstractChessAction, check_for_check=True):
-
         from_pos = action.from_pos
         to_pos = action.to_pos
 
@@ -142,7 +141,7 @@ class Silverman45ChessBoard(AbstractChessBoard):
         self.move_history.append(action)
 
         self.active_color = self.active_color.invert()
-
+        
     def pop(self) -> AbstractChessAction:
 
         if len(self.move_history) == 0: return None

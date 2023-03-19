@@ -21,8 +21,6 @@ class AbstractActionFlags(Enum):
     CHECK = 6
     CHECKMATE = 7
 
-    # TODO
-
 class AbstractChessAction:
     '''
         An abstract data type representing a chess action,
