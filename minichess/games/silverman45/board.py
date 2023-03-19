@@ -306,6 +306,20 @@ class Silverman45ChessBoard(AbstractChessBoard):
 
         return vector
 
+    def state_vector_color(self, is_white=True) -> np.array:
+        vector = self.state_vector()
+
+        if not is_white:
+            # flip board
+            vector = np.fliplr(np.flipud(vector))
+
+            # invert all colors
+            temp = vector[:,:,:6].copy()
+            vector[:,:,:6] = vector[:,:,6:]
+            vector[:,:,6:] = temp
+
+        return vector
+
     @property
     def status(self) -> AbstractBoardStatus:
         opp_can_move = len(self.legal_actions_for_color(self.active_color.invert())) > 0

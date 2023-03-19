@@ -13,9 +13,10 @@ import pickle
 import numpy as np
 from collections import defaultdict
 
+# Figure out Positive or Negative
 # ------------------------------------------------------------------------------------------------
 def reward(s, a):
-    reward = int(s._is_checking_action(a, s.active_color)[0]) / 5.0     # 0.2 or 0
+    reward = int(s._is_checking_action(a, s.active_color)[0]) / 10.0     # 0.2 or 0
     reward += int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 2.0  # 0.5 or 0
     if AbstractActionFlags.CAPTURE in a.modifier_flags:
         reward += a.captured_piece.value / 3000.0    # 0 to 0.94
@@ -33,14 +34,20 @@ KING_REWARDS = np.array([[ 0,  0,  0,  0],
                          [.1,  0,  0, .1],
                          [.7, .3, .3, .7],])  
         
-def U(s):
+def U(s, color=None):
     # King Safety (# pawns in front of king, amount of attacking power pointing at king, weak squares around king)
     # Amount of Material
     # Piece Activity --> Reward Rooks and Queen off the back rank (middle row), Pawns taking middle squares (more important), King staying back (not heavy)
-    white = (s.active_color == PieceColor.WHITE)
-    material = s.get_white_utility() if white else s.get_black_utility()
+    if color != None:
+        material = s.get_white_utility() if color else s.get_black_utility()
+    else:
+        white = (s.active_color == PieceColor.WHITE)
+        material = s.get_white_utility() if white else s.get_black_utility()
     activity = 0
-    board = s.canonical_state_vector()
+    if color != None:
+        board = s.state_vector_color(color)
+    else:
+        board = s.canonical_state_vector()
     for i in range(len(board)):
         for j in range(len(board[0])):
             c = board[i][j]
@@ -52,11 +59,12 @@ def U(s):
 
 # ------------------------------------------------------------------------------------------------
 class MonteCarloTreeSearch:
-    def __init__(self, m=100, d=20, c=3, gamma=0.95):
+    def __init__(self, m=100, d=20, c=3, gamma=0.95, num_candidates=3):
         self.m = m # number of simulations
         self.d = d # depth
         self.c = c # exploration constant
         self.gamma = gamma # discount factor
+        self.num_candidates = num_candidates # Number of move candidates to consider for softmax
 
         self.Q = {} # action value estimates
         self.N = {} # (s-a) visit counts
@@ -108,19 +116,17 @@ class MonteCarloTreeSearch:
         
     def make_move(self, s, softmax = True, scale = 5): # scale controls exploration vs. exploitation, higher scale -> greedy
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
+        # Detects states in which both kings are trapped
         if sum([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()]) == 0:
             return "DRAW"
         if softmax:
-            NUM_CANDIDATES = 3
             condensed_legal_actions = s.condensed_legal_actions()
             legal_actions = s.legal_actions()
             a_q_pairs = [(legal_actions[i], self.Q.get((s_rep, condensed_legal_actions[i]), 0)) for i in range(len(condensed_legal_actions))]
-            candidate_moves = sorted(a_q_pairs, key = lambda x: x[1], reverse=True)[:NUM_CANDIDATES]
+            candidate_moves = sorted(a_q_pairs, key = lambda x: x[1], reverse=True)[:self.num_candidates]
             actions = np.array([c[0] for c in candidate_moves])
             q_vals = np.array([c[1] for c in candidate_moves])
             softmax_q = numpy_scaled_softmax(q_vals, scale)
-            # print([str(a) for a in actions])
-            # print(softmax_q)
             return np.random.choice(actions, p = softmax_q)
         else: 
             return s.legal_actions()[np.argmax([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()])]
@@ -173,14 +179,15 @@ class ForwardSearch:
         self.gamma = g # lookahead discount
         
     def make_move(self, s):
+        print("-------------------------")
         return self.minimax_search(s, self.d, 0, -1000, 1000)[0]
 
     def minimax_search(self, s, d, turn, alpha, beta):
         if d <= 0:
-            return (None, U(s))
+            return (None, U(s, True))
         actions = s.legal_actions()
         if not actions:
-            return (None, U(s))
+            return (None, U(s, True))
 
         if turn == 0: # Maximizing
             best = (None, -1000)
@@ -189,6 +196,8 @@ class ForwardSearch:
                 s2.push(a)
                 se = self.minimax_search(s2, d - 1, 1 - turn, alpha, beta)[1]
                 u = reward(s, a) + se
+                if d == 4 or d == 3:
+                    print(d, a, u, se)
                 if (u == best[1] and random.randint(0, 1) == 0) or u > best[1]:
                     best = (a, u)
                     alpha = max(alpha, best[1])
@@ -203,6 +212,8 @@ class ForwardSearch:
                 s2.push(a)
                 se = self.minimax_search(s2, d - 1, 1 - turn, alpha, beta)[1]
                 u = reward(s, a) + se
+                if d == 3:
+                    print("    ", d, a, u)
                 if (u == best[1] and random.randint(0, 1) == 0) or u < best[1]:
                     best = (a, u)
                     beta = min(beta, best[1])
