@@ -2,7 +2,7 @@ import time
 import random
 from tkinter import *
 from PIL import Image, ImageTk
-from MCTS import MonteCarloTreeSearch, ForwardSearch
+from MCTS import MonteCarloTreeSearch, ForwardSearch, U_color
 from minichess.games.abstract.piece import PieceColor
 from minichess.games.silverman45.board import Silverman45ChessBoard
 from minichess.games.abstract.board import AbstractBoardStatus
@@ -150,8 +150,8 @@ def update_board():
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
     redraw_labels()
     game_status_var.set('Game Status: ' + str(game.status).split('.')[1] + "\n")
-    white_utility_var.set('White Utility: ' + str(round(game.get_white_utility() * 10, 3)))
-    black_utility_var.set('Black Utility: ' + str(round(game.get_black_utility() * 10, 3)) + "\n")
+    white_utility_var.set('White Utility: ' + str(round(U_color(game, True), 3)))
+    black_utility_var.set('Black Utility: ' + str(round(U_color(game, False), 3)) + "\n")
     root.update()
     return None
 
