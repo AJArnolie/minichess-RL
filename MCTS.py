@@ -12,16 +12,14 @@ import random
 import pickle
 import numpy as np
 from collections import defaultdict
-
-# Figure out Positive or Negative
 # ------------------------------------------------------------------------------------------------
-def reward(s, a):
-    reward = int(s._is_checking_action(a, s.active_color)[0]) / 10.0     # 0.2 or 0
-    reward += int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 2.0  # 0.5 or 0
-    if AbstractActionFlags.CAPTURE in a.modifier_flags:
-        reward += a.captured_piece.value / 3000.0    # 0 to 0.94
-    return reward
 
+def reward(s, a):
+    reward = int(s._is_checking_action(a, s.active_color)[0]) / 10.0
+    reward += int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 2.0 
+    if AbstractActionFlags.CAPTURE in a.modifier_flags:
+        reward += a.captured_piece.value / 3000.0 
+    return reward
 
 PAWN_REWARDS = np.array([[  0,  0,  0,  0],
                          [ .4, .4, .4, .4],
@@ -33,26 +31,27 @@ KING_REWARDS = np.array([[  0,  0,  0,  0],
                          [  0,  0,  0,  0],
                          [-.3,-.5,-.5,-.3],
                          [ .4, .1, .1, .4],])  
+
+LATE_PAWN_REWARDS = np.array([[  0,  0,  0,  0],
+                              [  1,  1,  1,  1],
+                              [ .8, .8, .8, .8],
+                              [-.5,-.5,-.5,-.5],
+                              [  0,  0,  0,  0],])                        
+LATE_KING_REWARDS = np.array([[  0,  0,  0,  0],
+                              [ .5, .5, .5, .5],
+                              [ .3, .3, .3, .3],
+                              [-.5,-.5,-.5,-.5],
+                              [-.8,-.8,-.8,-.8],])  
         
-def U(s):
-    # King Safety (# pawns in front of king, amount of attacking power pointing at king, weak squares around king)
-    # Amount of Material
-    # Piece Activity --> Reward Rooks and Queen off the back rank (middle row), Pawns taking middle squares (more important), King staying back (not heavy)
-    white = (s.active_color == PieceColor.WHITE)
-    material = s.get_white_utility() if white else s.get_black_utility()
-    activity = 0
-    board = s.canonical_state_vector()
-    for i in range(len(board)):
-        for j in range(len(board[0])):
-            c = board[i][j]
-            if c[0] == 1 and PAWN_REWARDS[i][j] != 0: 
-                activity += PAWN_REWARDS[i][j] / 10.0
-            elif c[5] == 1 and KING_REWARDS[i][j] != 0: 
-                activity += KING_REWARDS[i][j] / 10.0
-    return material + activity
 
 # Gets color dependent reward
 def U_color(s, white=True):
+    # Heuristics Used
+    #  -  Reward having More Material
+    #  -  Reward Rooks and Queen off the back rank (middle row)
+    #  -  Reward Pawns taking middle squares
+    #  -  Punish Doubled Pawns
+    #  -  Reward King staying back
     material = (s.get_white_utility() if white else s.get_black_utility()) / 2
     activity = get_position_reward(s, white) - get_position_reward(s, not white)
     return material + activity
@@ -61,15 +60,22 @@ def U_color(s, white=True):
 def get_position_reward(s, white):
     activity = 0
     board = s.state_vector_color(white)
+    late = bool(s.num_pieces(white) <= 3)
     for i in range(len(board)):
         for j in range(len(board[0])):
             c = board[i][j]
             if i > 0 and c[0] == 1 and board[i - 1][j][0] == 1:
                 activity -= 0.1
-            if c[0] == 1 and PAWN_REWARDS[i][j] != 0: 
-                activity += PAWN_REWARDS[i][j] / 15.0
-            elif c[5] == 1 and KING_REWARDS[i][j] != 0: 
-                activity += KING_REWARDS[i][j] / 10.0
+            if late:
+                if c[0] == 1 and LATE_PAWN_REWARDS[i][j] != 0: 
+                    activity += LATE_KING_REWARDS[i][j] / 15.0
+                elif c[5] == 1 and LATE_PAWN_REWARDS[i][j] != 0: 
+                    activity += LATE_KING_REWARDS[i][j] / 10.0
+            else:
+                if c[0] == 1 and PAWN_REWARDS[i][j] != 0: 
+                    activity += PAWN_REWARDS[i][j] / 15.0
+                elif c[5] == 1 and KING_REWARDS[i][j] != 0: 
+                    activity += KING_REWARDS[i][j] / 10.0
     return activity
 
 # ------------------------------------------------------------------------------------------------
@@ -114,7 +120,6 @@ class MonteCarloTreeSearch:
     def run_sims(self, state):
         turn = 0 if state.active_color == PieceColor.WHITE else 1
         for i in range(self.m):
-            if i % 100 == 0: print(i)
             self.simulate(copy.deepcopy(state), turn=turn, d=self.d)
         return self.make_move(state, softmax=False)
 
@@ -152,7 +157,7 @@ class MonteCarloTreeSearch:
         # End of game, return reward for winning
         if s.status != AbstractBoardStatus.ONGOING:
             if s.status == AbstractBoardStatus.DRAW:
-                return 0
+                return -.1
             else:
                 return 100
         # Reached max depth, return estimated utility for previous agent
@@ -195,25 +200,30 @@ class ForwardSearch:
         self.gamma = g # lookahead discount
         
     def make_move(self, s):
-        print("-------------------------")
-        return self.minimax_search(s, self.d, 0, -1000, 1000)[0]
+        white = bool(s.active_color == PieceColor.WHITE)
+        return self.minimax_search(s, self.d, 0, -1000, 1000, white)[0]
 
-    def minimax_search(self, s, d, turn, alpha, beta):
+    def minimax_search(self, s, d, turn, alpha, beta, white):
+        if s.status != AbstractBoardStatus.ONGOING:
+            if s.status == AbstractBoardStatus.DRAW:
+                return (None, 0)
+            else:
+                return (None, 100 if turn == 1 else -100)
         if d <= 0:
-            return (None, U(s, True))
+            return (None, U_color(s, white))
         actions = s.legal_actions()
         if not actions:
-            return (None, U(s, True))
+            return (None, U_color(s, white))
 
         if turn == 0: # Maximizing
             best = (None, -1000)
             for a in actions:
                 s2 = copy.deepcopy(s)
                 s2.push(a)
-                se = self.minimax_search(s2, d - 1, 1 - turn, alpha, beta)[1]
+                se = self.minimax_search(s2, d - 1, 1 - turn, alpha, beta, white)[1]
                 u = reward(s, a) + se
-                if d == 4 or d == 3:
-                    print(d, a, u, se)
+                if d == 4:
+                    print(d, a, u)
                 if (u == best[1] and random.randint(0, 1) == 0) or u > best[1]:
                     best = (a, u)
                     alpha = max(alpha, best[1])
@@ -226,10 +236,10 @@ class ForwardSearch:
             for a in actions:
                 s2 = copy.deepcopy(s)
                 s2.push(a)
-                se = self.minimax_search(s2, d - 1, 1 - turn, alpha, beta)[1]
+                se = self.minimax_search(s2, d - 1, 1 - turn, alpha, beta, white)[1]
                 u = reward(s, a) + se
                 if d == 3:
-                    print("    ", d, a, u)
+                    print("      ", d, a, u)
                 if (u == best[1] and random.randint(0, 1) == 0) or u < best[1]:
                     best = (a, u)
                     beta = min(beta, best[1])
@@ -237,6 +247,25 @@ class ForwardSearch:
                         break  
             return best
 # ------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # class MonteCarloTreeSearchWithFunctionApprox:
 #     def __init__(self, m=100, d=20, c=10, gamma=0.9):

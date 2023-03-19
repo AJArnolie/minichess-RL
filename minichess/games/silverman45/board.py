@@ -287,6 +287,15 @@ class Silverman45ChessBoard(AbstractChessBoard):
                 else: rep += [None]
         return rep
 
+    def num_pieces(self, white=True): # Make this more efficient
+        count = 0
+        board = self.state_vector_color(white)
+        for row in board:
+            for c in row:
+                if c[0] == 1 or c[3] == 1 or c[4] == 1 or c[5] == 1: count += 1
+        return count
+
+
     def state_vector(self) -> np.array:
         return np.concatenate([
             np.expand_dims(np.concatenate([tile.vector() for tile in row]), axis=0) for row in self._board

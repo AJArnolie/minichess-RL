@@ -2,7 +2,7 @@ import time
 import random
 from tkinter import *
 from PIL import Image, ImageTk
-from MCTS import MonteCarloTreeSearch, ForwardSearch, U
+from MCTS import MonteCarloTreeSearch, ForwardSearch
 from minichess.games.abstract.piece import PieceColor
 from minichess.games.silverman45.board import Silverman45ChessBoard
 from minichess.games.abstract.board import AbstractBoardStatus
@@ -15,12 +15,15 @@ IMAGE_PREFIX = "./images/"
 IMAGE_TYPE = ".png"
 IMAGE_NAMES = ["white_pawn", "white_rook", "white_queen", "white_king", "black_pawn", "black_rook", "black_queen", "black_king"]
 
-m = MonteCarloTreeSearch()
-f = ForwardSearch()
+m = MonteCarloTreeSearch(m=50, c=2)
+f = ForwardSearch(d=2)
 game = Silverman45ChessBoard()
 p = RandomPlayer()
 wld = [0, 0, 0]
 turn = random.randint(0, 1)
+average_moves = [0,0]
+average_avg_times = [0,0]
+average_game_time = 0
 
 root = Tk()
 root.geometry("1000x710")
@@ -120,7 +123,6 @@ def update_board():
         selected.set(proposed)  
         possible_actions_var.set(possible_actions_string())
         game.push(proposed)
-        a = U(game)
  
     l = game.populate_board()
     for i in range(len(l)):
@@ -135,26 +137,56 @@ def update_board():
 def run_game():
     st = time.time()
     global wld, game, turn, board_tiles
+    global average_moves, average_avg_times
     restart_game()
     turn = random.randint(0, 1)
     white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
     black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
     val = None
+    num_moves = [0, 0]
+    tot_move_length = [0, 0]
     while game.status == AbstractBoardStatus.ONGOING and val == None:
+        n = time.time()
         val = update_board()
+        e = time.time()
+        tot_move_length[1] += e - n
+        num_moves[1] += 1
+        if turn != bool(game.active_color == PieceColor.WHITE):
+            tot_move_length[0] += e - n
+            num_moves[0] += 1
     if game.status == AbstractBoardStatus.BLACK_WIN: wld[turn] += 1
     elif game.status == AbstractBoardStatus.WHITE_WIN: wld[1 - turn] += 1
     else: wld[2] += 1
-    m.dump_data()
+    #m.dump_data()
     wld_var.set(str(wld[0]) + " - " + str(wld[1]) + " - "  + str(wld[2]) + " (Wins, Losses, Draws)\n\n")
     root.update()
+
+    average_moves[0] += num_moves[0]
+    average_moves[1] += num_moves[1]
+    average_avg_times[0] += tot_move_length[0] / num_moves[0]
+    average_avg_times[1] += tot_move_length[1] / num_moves[1]
+
     print("Game Time Length: ", time.time() - st)
+    print("Num Moves: ", num_moves)
+    print("Average Move Length: ", (tot_move_length[0] / num_moves[0], tot_move_length[1] / num_moves[1]))
+    print("(Wins, Losses, Draws): ", wld)
+    
 
     
 def run_100_games():
-    for _ in range(100):
+    global average_game_time
+    for i in range(100):
+        print("|||||| Game", i+1, "||||||")
+        st = time.time()
         run_game()
+        e = time.time()
+        average_game_time += e - st
         restart_game()
+        print()
+        print("AVERAGE MOVES: ", (average_moves[0] / (i+1.0), average_moves[1] / (i+1.0)))
+        print("AVERAGE MOVE LENGTH: ", (average_avg_times[0] / (i+1.0), average_avg_times[1] / (i+1.0)))
+        print("AVERAGE GAME TIME: ", average_game_time / (i+1.0))
+        print("-----------------------------")
 
 def restart_game():
     global root
