@@ -50,7 +50,6 @@ def action_str(a):
     return "(" + COLUMNS[a.from_pos[1]] + ROWS[a.from_pos[0]] + "  ->  " + COLUMNS[a.to_pos[1]] + ROWS[a.to_pos[0]] + ")"
 
 def possible_actions_string():
-    print(turn)
     s = "Possible Actions:\n"
     actions = game.legal_actions()
     info = m.get_move_info(game)
