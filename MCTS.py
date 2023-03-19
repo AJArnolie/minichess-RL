@@ -23,43 +23,58 @@ def reward(s, a):
     return reward
 
 
-PAWN_REWARDS = np.array([[ 0,  0,  0,  0],
-                         [.2, .2, .2, .2],
-                         [ 1,  1,  1,  1],
-                         [ 0,  0,  0,  0],
-                         [ 0,  0,  0,  0],])                        
-KING_REWARDS = np.array([[ 0,  0,  0,  0],
-                         [ 0,  0,  0,  0],
-                         [ 0,  0,  0,  0],
-                         [.1,  0,  0, .1],
-                         [.7, .3, .3, .7],])  
+PAWN_REWARDS = np.array([[  0,  0,  0,  0],
+                         [ .4, .4, .4, .4],
+                         [ .8, .8, .8, .8],
+                         [  0,  0,  0,  0],
+                         [  0,  0,  0,  0],])                        
+KING_REWARDS = np.array([[  0,  0,  0,  0],
+                         [  0,  0,  0,  0],
+                         [  0,  0,  0,  0],
+                         [-.3,-.5,-.5,-.3],
+                         [ .4, .1, .1, .4],])  
         
-def U(s, color=None):
+def U(s):
     # King Safety (# pawns in front of king, amount of attacking power pointing at king, weak squares around king)
     # Amount of Material
     # Piece Activity --> Reward Rooks and Queen off the back rank (middle row), Pawns taking middle squares (more important), King staying back (not heavy)
-    if color != None:
-        material = s.get_white_utility() if color else s.get_black_utility()
-    else:
-        white = (s.active_color == PieceColor.WHITE)
-        material = s.get_white_utility() if white else s.get_black_utility()
+    white = (s.active_color == PieceColor.WHITE)
+    material = s.get_white_utility() if white else s.get_black_utility()
     activity = 0
-    if color != None:
-        board = s.state_vector_color(color)
-    else:
-        board = s.canonical_state_vector()
+    board = s.canonical_state_vector()
     for i in range(len(board)):
         for j in range(len(board[0])):
             c = board[i][j]
-            if c[0] == 1 and PAWN_REWARDS[i][j] > 0: 
+            if c[0] == 1 and PAWN_REWARDS[i][j] != 0: 
                 activity += PAWN_REWARDS[i][j] / 10.0
-            elif c[5] == 1 and KING_REWARDS[i][j] > 0: 
+            elif c[5] == 1 and KING_REWARDS[i][j] != 0: 
                 activity += KING_REWARDS[i][j] / 10.0
     return material + activity
 
+# Gets color dependent reward
+def U_color(s, white=True):
+    material = (s.get_white_utility() if white else s.get_black_utility()) / 2
+    activity = get_position_reward(s, white) - get_position_reward(s, not white)
+    return material + activity
+
+# Gets reward for color based on positions of pieces
+def get_position_reward(s, white):
+    activity = 0
+    board = s.state_vector_color(white)
+    for i in range(len(board)):
+        for j in range(len(board[0])):
+            c = board[i][j]
+            if i > 0 and c[0] == 1 and board[i - 1][j][0] == 1:
+                activity -= 0.1
+            if c[0] == 1 and PAWN_REWARDS[i][j] != 0: 
+                activity += PAWN_REWARDS[i][j] / 15.0
+            elif c[5] == 1 and KING_REWARDS[i][j] != 0: 
+                activity += KING_REWARDS[i][j] / 10.0
+    return activity
+
 # ------------------------------------------------------------------------------------------------
 class MonteCarloTreeSearch:
-    def __init__(self, m=100, d=20, c=3, gamma=0.95, num_candidates=3):
+    def __init__(self, m=500, d=20, c=2, gamma=0.95, num_candidates=3):
         self.m = m # number of simulations
         self.d = d # depth
         self.c = c # exploration constant
@@ -98,7 +113,8 @@ class MonteCarloTreeSearch:
     # Performs m iterations of MCTS
     def run_sims(self, state):
         turn = 0 if state.active_color == PieceColor.WHITE else 1
-        for _ in range(self.m):
+        for i in range(self.m):
+            if i % 100 == 0: print(i)
             self.simulate(copy.deepcopy(state), turn=turn, d=self.d)
         return self.make_move(state, softmax=False)
 
@@ -139,15 +155,15 @@ class MonteCarloTreeSearch:
                 return 0
             else:
                 return 100
-        # Reached max depth, return estimated utility
-        if d <= 0: return -U(s)
+        # Reached max depth, return estimated utility for previous agent
+        if d <= 0: return U_color(s, bool(turn))
         
         if s_rep not in self.Ns:
             self.Ns[s_rep] = 0
             for a in s.condensed_legal_actions():
                 self.N[(s_rep, a)] = 0
                 self.Q[(s_rep, a)] = 0.0
-            return -U(s)
+            return U_color(s, bool(turn))
 
         a = self.explore(s, turn)
         r = reward(s, a)
@@ -163,8 +179,8 @@ class MonteCarloTreeSearch:
 # UCB1 Exploration Policy
 # --------------------------------
     def bonus(self, nsa, ns):
-        return float('inf') if nsa == 0 else math.sqrt(math.log(ns) / nsa) # Default UCB1
-        # return math.sqrt(ns) / (1 + nsa) # AlphaZero Exploration Policy
+        return float('inf') if nsa == 0 else math.sqrt(math.log(ns) / nsa) # Default UCB1# Default UCB1
+        #return math.sqrt(ns) / (1 + nsa) # AlphaZero Exploration Policy
 
     def explore(self, s, turn):
         s_rep = s.state_representation() + str(turn)
