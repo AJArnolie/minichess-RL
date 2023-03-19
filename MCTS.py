@@ -5,15 +5,15 @@ from minichess.games.abstract.piece import PieceColor
 from minichess.players.gardner import RandomPlayer
 from minichess.utils import numpy_scaled_softmax
 
-import math
-import time
-import random
-import numpy as np
-import copy
-from collections import defaultdict
-import pickle
 import os
+import math
+import copy
+import random
+import pickle
+import numpy as np
+from collections import defaultdict
 
+# ------------------------------------------------------------------------------------------------
 def reward(s, a):
     reward = int(s._is_checking_action(a, s.active_color)[0]) / 5.0     # 0.2 or 0
     reward += int(AbstractActionFlags.PROMOTE_QUEEN in a.modifier_flags) / 2.0  # 0.5 or 0
@@ -21,9 +21,36 @@ def reward(s, a):
         reward += a.captured_piece.value / 3000.0    # 0 to 0.94
     return reward
 
-def U(s):
-    return s.get_white_utility() if s.active_color == PieceColor.WHITE else s.get_black_utility()
 
+PAWN_REWARDS = np.array([[ 0,  0,  0,  0],
+                         [.2, .2, .2, .2],
+                         [ 1,  1,  1,  1],
+                         [ 0,  0,  0,  0],
+                         [ 0,  0,  0,  0],])                        
+KING_REWARDS = np.array([[ 0,  0,  0,  0],
+                         [ 0,  0,  0,  0],
+                         [ 0,  0,  0,  0],
+                         [.1,  0,  0, .1],
+                         [.7, .3, .3, .7],])  
+        
+def U(s):
+    # King Safety (# pawns in front of king, amount of attacking power pointing at king, weak squares around king)
+    # Amount of Material
+    # Piece Activity --> Reward Rooks and Queen off the back rank (middle row), Pawns taking middle squares (more important), King staying back (not heavy)
+    white = (s.active_color == PieceColor.WHITE)
+    material = s.get_white_utility() if white else s.get_black_utility()
+    activity = 0
+    board = s.canonical_state_vector()
+    for i in range(len(board)):
+        for j in range(len(board[0])):
+            c = board[i][j]
+            if c[0] == 1 and PAWN_REWARDS[i][j] > 0: 
+                activity += PAWN_REWARDS[i][j] / 10.0
+            elif c[5] == 1 and KING_REWARDS[i][j] > 0: 
+                activity += KING_REWARDS[i][j] / 10.0
+    return material + activity
+
+# ------------------------------------------------------------------------------------------------
 class MonteCarloTreeSearch:
     def __init__(self, m=100, d=20, c=3, gamma=0.95):
         self.m = m # number of simulations
@@ -83,8 +110,8 @@ class MonteCarloTreeSearch:
         s_rep = s.state_representation() + ("0" if s.active_color == PieceColor.WHITE else "1")
         if sum([self.Q.get((s_rep, a), 0) for a in s.condensed_legal_actions()]) == 0:
             return "DRAW"
-        NUM_CANDIDATES = 3
         if softmax:
+            NUM_CANDIDATES = 3
             condensed_legal_actions = s.condensed_legal_actions()
             legal_actions = s.legal_actions()
             a_q_pairs = [(legal_actions[i], self.Q.get((s_rep, condensed_legal_actions[i]), 0)) for i in range(len(condensed_legal_actions))]
@@ -136,6 +163,8 @@ class MonteCarloTreeSearch:
     def explore(self, s, turn):
         s_rep = s.state_representation() + str(turn)
         return s.legal_actions()[np.argmax([self.Q[(s_rep, a)] + self.c * self.bonus(self.N[(s_rep, a)], self.Ns[s_rep]) for a in s.condensed_legal_actions()])]
+# ------------------------------------------------------------------------------------------------
+
 
 # ------------------------------------------------------------------------------------------------
 class ForwardSearch:

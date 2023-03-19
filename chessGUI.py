@@ -2,7 +2,7 @@ import time
 import random
 from tkinter import *
 from PIL import Image, ImageTk
-from MCTS import MonteCarloTreeSearch, ForwardSearch
+from MCTS import MonteCarloTreeSearch, ForwardSearch, U
 from minichess.games.abstract.piece import PieceColor
 from minichess.games.silverman45.board import Silverman45ChessBoard
 from minichess.games.abstract.board import AbstractBoardStatus
@@ -109,7 +109,6 @@ def update_board():
     global root, game, turn, board_tiles
     white_player_name.set('White Player: ' + (player1.get() if turn else player2.get()))
     black_player_name.set('Black Player: ' + (player2.get() if turn else player1.get()) + "\n\n")
-
     if game.status == AbstractBoardStatus.ONGOING:
         if (player1.get() if turn == bool(game.active_color == PieceColor.WHITE) else player2.get()) == "MCTS":
             proposed = m.run_sims(game) if update_Qvalues.get() == "Update Q" else m.make_move(game)
@@ -121,6 +120,7 @@ def update_board():
         selected.set(proposed)  
         possible_actions_var.set(possible_actions_string())
         game.push(proposed)
+        a = U(game)
  
     l = game.populate_board()
     for i in range(len(l)):
