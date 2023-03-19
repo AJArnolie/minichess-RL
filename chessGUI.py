@@ -14,6 +14,8 @@ BG_COLOR = "#ececec"
 IMAGE_PREFIX = "./images/"
 IMAGE_TYPE = ".png"
 IMAGE_NAMES = ["white_pawn", "white_rook", "white_queen", "white_king", "black_pawn", "black_rook", "black_queen", "black_king"]
+ROWS = ["5", "4", "3", "2", "1"]
+COLUMNS = ["A", "B", "C", "D"]
 
 m = MonteCarloTreeSearch(m=50, c=2)
 f = ForwardSearch(d=2)
@@ -44,14 +46,18 @@ player1 = StringVar(root, "MCTS")
 player2 = StringVar(root, "MCTS")
 selected = StringVar(root, "")
 
+def action_str(a):
+    return "(" + COLUMNS[a.from_pos[1]] + ROWS[a.from_pos[0]] + "  ->  " + COLUMNS[a.to_pos[1]] + ROWS[a.to_pos[0]] + ")"
+
 def possible_actions_string():
+    print(turn)
     s = "Possible Actions:\n"
     actions = game.legal_actions()
     info = m.get_move_info(game)
     for i in range(len(actions))[:10]:
-        s += str(i+1) + ". " + str(actions[i]) + " Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
+        s += str(i+1) + ". " + action_str(actions[i]) + "      Q(s, a) = " + str(round(info[i][0], 3)) + ",  N(s, a) = " + str(info[i][1]) + "\n"
     if len(actions) > 10: s += "...\n"
-    s += "\nAction Selected: " + selected.get() + " by " + ("Black" if turn == 1 else "White")
+    s += "\nAction Selected: " + selected.get() + " by " + ("Black" if game.active_color == PieceColor.BLACK else "White")
     return s
 
 possible_actions_var = StringVar(root, possible_actions_string())
@@ -80,13 +86,28 @@ center.grid_columnconfigure(1, weight=1)
 board = Frame(center, width=480, height=600)
 board_tiles = [[None for _ in range(4)] for _ in range(5)]
 
+def redraw_labels():
+    global board_tiles
+    board_tiles[0][0].create_text(60, 10, text="A", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[0][1].create_text(60, 10, text="B", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[0][2].create_text(60, 10, text="C", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[0][3].create_text(60, 10, text="D", fill="black", font=('Modern', 12, 'bold'))
+
+    board_tiles[0][0].create_text(10, 60, text="5", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[1][0].create_text(10, 60, text="4", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[2][0].create_text(10, 60, text="3", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[3][0].create_text(10, 60, text="2", fill="black", font=('Modern', 12, 'bold'))
+    board_tiles[4][0].create_text(10, 60, text="1", fill="black", font=('Modern', 12, 'bold'))
+
 l = game.populate_board()
 for i in range(5):
     for j in range(4):
-        board_tiles[i][j] = Canvas(board, bg=(DARK_COLOR if (i+j) % 2 == 0 else LIGHT_COLOR), 
+        board_tiles[i][j] = Canvas(board, bg=(DARK_COLOR if (i+j) % 2 == 1 else LIGHT_COLOR), 
                                         width=120, height=120, highlightthickness=0)
         if l[i*4+j] != None: board_tiles[i][j].create_image(60, 60, image=images[l[i*4+j]])
         board_tiles[i][j].grid(column=j, row=i)
+redraw_labels()
+
 
 ctr_mid = Frame(center, width=500, height=600, padx=3, pady=3, bg=BG_COLOR)
 white_player = Label(ctr_mid, textvariable=white_player_name, font=('Modern', 16, 'bold'), justify=LEFT, anchor="w")
@@ -120,7 +141,7 @@ def update_board():
             proposed = f.make_move(game)
         else:
             _, proposed = p.propose_action(game, None, game.legal_action_mask()) 
-        selected.set(proposed)  
+        selected.set(action_str(proposed))  
         possible_actions_var.set(possible_actions_string())
         game.push(proposed)
  
@@ -128,6 +149,7 @@ def update_board():
     for i in range(len(l)):
         board_tiles[i // 4][i % 4].delete('all')
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
+    redraw_labels()
     game_status_var.set('Game Status: ' + str(game.status).split('.')[1] + "\n")
     white_utility_var.set('White Utility: ' + str(round(game.get_white_utility() * 10, 3)))
     black_utility_var.set('Black Utility: ' + str(round(game.get_black_utility() * 10, 3)) + "\n")
@@ -171,8 +193,6 @@ def run_game():
     print("Average Move Length: ", (tot_move_length[0] / num_moves[0], tot_move_length[1] / num_moves[1]))
     print("(Wins, Losses, Draws): ", wld)
     
-
-    
 def run_100_games():
     global average_game_time
     for i in range(100):
@@ -202,6 +222,7 @@ def restart_game():
     for i in range(len(l)):
         board_tiles[i // 4][i % 4].delete('all')
         if l[i] != None: board_tiles[i // 4][i % 4].create_image(60, 60, image=images[l[i]])
+    redraw_labels()
     game_status_var.set('Game Status: ' + str(game.status).split('.')[1] + "\n")
     white_utility_var.set('White Utility: 0.0')
     black_utility_var.set('Black Utility: -0.0\n')
